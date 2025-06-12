@@ -139,25 +139,42 @@ app.post('/api/cj-products', async (req, res) => {
         return [];
       }
 
-      // Simplified prioritization logic to avoid errors with undefined properties
-      const prioritizedLinks = linksArray.sort((a, b) => {
-        const hasPriceA = a['price'] ? true : false;
-        const hasPriceB = b['price'] ? true : false;
-        const hasImageA = a['image-url'] ? true : false;
-        const hasImageB = b['image-url'] ? true : false;
-
-        let scoreA = (hasPriceA ? 2 : 0) + (hasImageA ? 1 : 0);
-        let scoreB = (hasPriceB ? 2 : 0) + (hasImageB ? 1 : 0);
-        return scoreB - scoreA; // Higher score first
+      // Filter out promotional links, keep those that look like products
+      const productLinks = linksArray.filter(link => {
+        const linkName = typeof link['link-name'] === 'string' ? link['link-name'].toLowerCase() : '';
+        const description = typeof link['description'] === 'string' ? link['description'].toLowerCase() : '';
+        const hasPrice = !!link['price'];
+        const hasImage = !!link['image-url'];
+        const hasSku = !!link['sku'];
+        // Skip links that are clearly promotions
+        const isPromotion = linkName.includes('off') || linkName.includes('sale') || linkName.includes('coupon') || description.includes('off') || description.includes('sale');
+        // Keep links that have product indicators
+        return (hasPrice || hasImage || hasSku) && !isPromotion;
       });
 
-      const productsWithLinks = prioritizedLinks.map(link => ({
-        name: link['link-name'] || link['promotion-type'] || 'No title available',
+      if (productLinks.length === 0) {
+        console.log(`[${new Date().toISOString()}] No product-specific links found for ${store}, returning all links as fallback`);
+        const productsWithLinks = linksArray.map(link => ({
+          name: typeof link['link-name'] === 'string' ? link['link-name'] : link['promotion-type'] || 'No title available',
+          price: { 
+            value: link['price'] || 'N/A', 
+            currency: link['currency'] || 'USD' 
+          },
+          description: typeof link['description'] === 'string' ? link['description'] : link['category'] || 'No description available. This may be a promotional link.',
+          shipping: link['shipping'] || 'Shipping information not available.',
+          link: link['clickUrl'] || link['link-url'] || '#',
+          image: link['image-url'] || link['advertiser-image-url'] || 'https://via.placeholder.com/150'
+        }));
+        return productsWithLinks;
+      }
+
+      const productsWithLinks = productLinks.map(link => ({
+        name: typeof link['link-name'] === 'string' ? link['link-name'] : link['promotion-type'] || 'No title available',
         price: { 
           value: link['price'] || 'N/A', 
           currency: link['currency'] || 'USD' 
         },
-        description: link['description'] || link['category'] || 'No description available.',
+        description: typeof link['description'] === 'string' ? link['description'] : link['category'] || 'No description available.',
         shipping: link['shipping'] || 'Shipping information not available.',
         link: link['clickUrl'] || link['link-url'] || '#',
         image: link['image-url'] || link['advertiser-image-url'] || 'https://via.placeholder.com/150'
