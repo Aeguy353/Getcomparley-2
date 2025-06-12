@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Details - Comparley</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+    }
+    .product-container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .product-title {
+      font-size: 1.5em;
+      margin-bottom: 10px;
+    }
+    .product-price {
+      font-size: 1.2em;
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    .product-description {
+      margin-bottom: 15px;
+      color: #555;
+    }
+    .product-shipping {
+      margin-bottom: 15px;
+      color: #777;
+    }
+    .buy-button {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .buy-button:hover {
+      background-color: #45a049;
+    }
+    footer {
+      margin-top: 20px;
+    }
+    footer p {
+      font-size: 0.9em;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Product Details</h1>
+    <div class="product-container" id="product-details">
+      <div class="product-title">Loading...</div>
+      <div class="product-price"></div>
+      <div class="product-description"></div>
+      <div class="product-shipping"></div>
+      <a href="#" class="buy-button" id="buy-link">Buy Now</a>
+    </div>
+    <p><a href="index.html">Back to Search</a></p>
+  </main>
+  <footer>
+    <p>More stores being added daily | Veteran Owned | <a href="/privacy-policy">Privacy Policy</a></p>
+    <p style="font-size: 0.9em; color: #555;">This site uses affiliate links, and I may earn a commission at no extra cost to you if you buy through the links provided.</p>
+  </footer>
+  <script>
+    // Extract product data from URL query parameters
+    const params = new URLSearchParams(window.location.search);
+    const name = decodeURIComponent(params.get('name') || 'Unknown Product');
+    const price = params.get('price') || 'N/A';
+    const currency = params.get('currency') || '';
+    const description = decodeURIComponent(params.get('description') || 'No description available.');
+    const shipping = decodeURIComponent(params.get('shipping') || 'Shipping information not available.');
+    const link = decodeURIComponent(params.get('link') || '#');
+
+    // Populate the page with product data
+    document.querySelector('.product-title').textContent = name;
+    document.querySelector('.product-price').textContent = `Price: ${price} ${currency}`;
+    document.querySelector('.product-description').textContent = `Description: ${description}`;
+    document.querySelector('.product-shipping').textContent = `Shipping: ${shipping}`;
+    const buyLink = document.getElementById('buy-link');
+    buyLink.href = link;
+    buyLink.textContent = 'Buy Now';
+  </script>
+</body>
+</html>
