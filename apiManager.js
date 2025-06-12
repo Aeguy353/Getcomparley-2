@@ -1,4 +1,3 @@
-apiManager.js
 const fetch = require('node-fetch');
 const xml2js = require('xml2js');
 const querystring = require('querystring');
