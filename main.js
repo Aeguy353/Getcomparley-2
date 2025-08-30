@@ -40,9 +40,17 @@ document.addEventListener("DOMContentLoaded", () => {
       <option value="ebay">eBay</option>
       <option value="georgiaboot-cj">GeorgiaBoot.com</option>
     `;
-  } else {
-    console.warn("No store-select element found on this page.");
   }
+
+  // Attach event listeners if buttons exist
+  const addBtn = document.getElementById("add-store-btn");
+  if (addBtn) addBtn.addEventListener("click", addStore);
+
+  const searchBtn = document.getElementById("search-btn");
+  if (searchBtn) searchBtn.addEventListener("click", searchAllStores);
+
+  const trustBtn = document.getElementById("trustus-btn");
+  if (trustBtn) trustBtn.addEventListener("click", trustUsSearch);
 
   const searchInput = document.getElementById("search-input");
   if (searchInput) {
@@ -54,19 +62,19 @@ let selectedStores = [];
 
 function addStore() {
   const select = document.getElementById("store-select");
+  if (!select) return;
   const store = select.value;
   if (!store) {
     displayError("Please select a store to add.");
     return;
   }
-
   if (!selectedStores.includes(store)) {
     selectedStores.push(store);
     updateSelectedStoresList();
   } else {
     displayError("Store already added.");
   }
-  select.value = ""; // Reset the dropdown
+  select.value = "";
 }
 
 function removeStore(store) {
@@ -76,6 +84,7 @@ function removeStore(store) {
 
 function updateSelectedStoresList() {
   const list = document.getElementById("selected-stores-list");
+  if (!list) return;
   list.innerHTML = "";
   selectedStores.forEach(store => {
     const storeDiv = document.createElement("div");
@@ -83,96 +92,84 @@ function updateSelectedStoresList() {
     const [storeName, platform] = store.includes('-') ? store.split('-') : [store, store === 'ebay' ? 'ebay' : ''];
     storeDiv.innerHTML = `
       <span>${storeName.replace(/([A-Z])/g, ' $1').trim()}${platform === 'cj' ? ' (via CJ)' : ''}</span>
-      <button onclick="removeStore('${store}')">Remove</button>
+      <button type="button" data-store="${store}">Remove</button>
     `;
+    storeDiv.querySelector("button").addEventListener("click", () => removeStore(store));
     list.appendChild(storeDiv);
   });
 }
 
 async function searchAllStores() {
-  const searchInput = document.getElementById("search-input").value.trim();
-  if (!searchInput) {
+  const searchInput = document.getElementById("search-input");
+  if (!searchInput) return;
+  const searchTerm = searchInput.value.trim();
+  if (!searchTerm) {
     displayError("Please enter a search term (e.g., shoes)");
     return;
   }
-
   if (selectedStores.length === 0) {
     displayError("Please add at least one store to search.");
     return;
   }
-
   clearResults();
-
   const allProducts = [];
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
   for (const store of selectedStores) {
     const [storeName, platform] = store.includes('-') ? store.split('-') : [store, store === 'ebay' ? 'ebay' : ''];
     try {
-      console.log(`[${new Date().toISOString()}] Fetching products for ${storeName} (${platform})...`);
       let response;
+      let controller, signal;
+      if (window.AbortController && AbortSignal.timeout) {
+        controller = new AbortController();
+        signal = AbortSignal.timeout(10000);
+      }
       if (platform === 'cj') {
         response = await fetch('/api/cj-products', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keywords: searchInput, store: storeName }),
-          signal: AbortSignal.timeout(10000) // 10-second timeout
+          body: JSON.stringify({ keywords: searchTerm, store: storeName }),
+          signal: signal
         });
       } else if (platform === 'ebay' || store === 'ebay') {
-        response = await fetch(`/api/ebay-products?keywords=${encodeURIComponent(searchInput)}`, {
-          signal: AbortSignal.timeout(10000) // 10-second timeout
+        response = await fetch(`/api/ebay-products?keywords=${encodeURIComponent(searchTerm)}`, {
+          signal: signal
         });
       } else {
         throw new Error("Invalid store");
       }
-
       if (!response.ok) {
         const text = await response.text();
-        console.error(`[${new Date().toISOString()}] Fetch failed for ${storeName} (${platform}): HTTP ${response.status}: ${text}`);
         throw new Error(`HTTP ${response.status}: ${text}`);
       }
-
       const data = await response.json();
-      console.log(`[${new Date().toISOString()}] Raw API response for ${storeName} (${platform}):`, data);
-
       let products = [];
       if (platform === 'ebay' || store === 'ebay') {
         products = data.itemSummaries || [];
       } else if (platform === 'cj') {
         products = Array.isArray(data.products) ? data.products : [];
       }
-      if (products.length === 0) {
-        console.log(`[${new Date().toISOString()}] No products found for ${storeName} (${platform})`);
-      } else {
-        console.log(`[${new Date().toISOString()}] Products parsed for ${storeName} (${platform}):`, products);
-      }
       products.forEach(product => {
         product.store = platform === 'ebay' || store === 'ebay' ? "eBay" : `${storeName.replace(/([A-Z])/g, ' $1').trim()} (via CJ)`;
         allProducts.push(product);
       });
-
-      await delay(3000); // Increased to 3-second delay to avoid CJ rate limits
+      await delay(3000);
     } catch (err) {
-      console.error(`[${new Date().toISOString()}] Error for ${storeName} (${platform}):`, err.message);
-      displayError(`Failed to fetch products from ${storeName.replace(/([A-Z])/g, ' $1').trim()}${platform === 'cj' ? ' (via CJ)' : ''}: ${err.message}`);
+      displayError(`Failed to fetch products from ${store.replace(/([A-Z])/g, ' $1').trim()}: ${err.message}`);
     }
   }
-
-  console.log(`[${new Date().toISOString()}] Final collected products:`, allProducts);
   if (allProducts.length > 0) {
     displayResults(allProducts);
   } else {
-    console.warn("No products were collected.");
     displayError("No products found for the selected stores.");
   }
 }
 
 function displayResults(products) {
   const searchSection = document.querySelector(".search-section");
+  if (!searchSection) return;
   const resultsSection = document.createElement("div");
   resultsSection.className = "results-section";
   resultsSection.innerHTML = `<h2>Search Results</h2>`;
-  
   products.forEach(product => {
     const productDiv = document.createElement("div");
     productDiv.className = "product";
@@ -180,30 +177,29 @@ function displayResults(products) {
     productDiv.style.margin = "10px 0";
     productDiv.style.padding = "10px";
     productDiv.innerHTML = `
-      <h3>${product.name || product.title}</h3>
-      <p><strong>Store:</strong> ${product.store}${product.store === 'eBay' ? '' : ' (via CJ)'}</p>
-      <p><strong>Price:</strong> ${product.price.value} ${product.price.currency}</p>
-      <p><strong>Description:</strong> ${product.description}</p>
-      <p><strong>Shipping:</strong> ${product.shipping}</p>
-      <a href="${product.link}" target="_blank">View Product</a>
+      <h3>${product.name || product.title || "No Title"}</h3>
+      <p><strong>Store:</strong> ${product.store}</p>
+      <p><strong>Price:</strong> ${product.price?.value || "N/A"} ${product.price?.currency || ""}</p>
+      <p><strong>Description:</strong> ${product.description || ""}</p>
+      <p><strong>Shipping:</strong> ${product.shipping || ""}</p>
+      <a href="${product.link || "#"}" target="_blank">View Product</a>
       <br>
-      <img src="${product.image}" alt="${product.name || product.title}" width="150" height="150">
+      <img src="${product.image || ""}" alt="${product.name || product.title || ""}" width="150" height="150">
     `;
     resultsSection.appendChild(productDiv);
   });
-
   searchSection.appendChild(resultsSection);
 }
 
 function trustUsSearch() {
-  const searchInput = document.getElementById("search-input").value.trim();
-  if (!searchInput) {
+  const searchInput = document.getElementById("search-input");
+  if (!searchInput) return;
+  const searchTerm = searchInput.value.trim();
+  if (!searchTerm) {
     displayError("Please enter a search term (e.g., shoes)");
     return;
   }
-
   clearResults();
-
   const stores = [
     '2ndcharles', 'booksamillion', 'airvape', 'mobilepixels', 'birdfy', 'yarden', 'corro', 'sportsmanswarehouse',
     'designshop', 'directdeals', 'durangoboots', 'rockyboots', 'edenfantasys', 'melodysusie', 'entirelypets',
@@ -211,12 +207,11 @@ function trustUsSearch() {
     'modloft', 'rugsource', 'sicotas', 'muckbootus', 'sullenclothing', 'xtratuf', 'powersystems', 'soccergarage',
     'tinyland', 'willworkjewelry', 'georgiaboot'
   ];
-
   const cjPromises = stores.map(store =>
     fetch('/api/cj-products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keywords: searchInput, store })
+      body: JSON.stringify({ keywords: searchTerm, store })
     })
       .then(res => {
         if (!res.ok) {
@@ -226,7 +221,7 @@ function trustUsSearch() {
       })
       .catch(err => ({ error: err.message, store }))
   );
-  const ebayPromise = fetch(`/api/ebay-products?keywords=${encodeURIComponent(searchInput)}`)
+  const ebayPromise = fetch(`/api/ebay-products?keywords=${encodeURIComponent(searchTerm)}`)
     .then(res => {
       if (!res.ok) {
         return res.text().then(text => { throw new Error(`HTTP ${res.status}: ${text}`); });
@@ -240,47 +235,44 @@ function trustUsSearch() {
       const allProducts = [];
       results.forEach(result => {
         if (result.error) {
-          console.log(`[${new Date().toISOString()}] Error for ${result.store}: ${result.error}`);
-          displayError(`Failed to fetch products from ${result.store.replace(/([A-Z])/g, ' $1').trim()}${result.store.endsWith('-cj') ? ' (via CJ)' : ''}`);
+          displayError(`Failed to fetch products from ${result.store.replace(/([A-Z])/g, ' $1').trim()}`);
         } else if (result.store === 'ebay') {
           const products = result.itemSummaries || [];
-          console.log(`[${new Date().toISOString()}] eBay products:`, products);
           products.forEach(product => {
             product.store = "eBay";
             allProducts.push(product);
           });
         } else {
           const products = Array.isArray(result.products) ? result.products : [];
-          console.log(`[${new Date().toISOString()}] CJ products for ${result.store}:`, products);
           products.forEach(product => {
             product.store = result.store.replace(/([A-Z])/g, ' $1').trim() + " (via CJ)";
             allProducts.push(product);
           });
         }
       });
-      console.log(`[${new Date().toISOString()}] All products collected in trustUsSearch:`, allProducts);
       if (allProducts.length > 0) {
         displayResults(allProducts);
       } else {
-        console.warn("No products were collected in trustUsSearch.");
         displayError("No products found for the selected stores.");
       }
     })
-    .catch(error => {
-      console.error(`[${new Date().toISOString()}] Error in trustUsSearch:`, error);
+    .catch(() => {
       displayError("An unexpected error occurred during search");
     });
 }
 
 function displayError(message) {
+  const main = document.querySelector("main");
+  if (!main) return;
   const errorDiv = document.createElement("div");
   errorDiv.className = "error-message";
   errorDiv.innerHTML = `<p style="color: red;">${message}</p>`;
-  document.querySelector("main").appendChild(errorDiv);
+  main.appendChild(errorDiv);
 }
 
 function clearResults() {
   const main = document.querySelector("main");
+  if (!main) return;
   const existingResults = main.querySelectorAll(".results-section, .error-message");
   existingResults.forEach(result => result.remove());
 }
